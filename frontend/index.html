@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polls - Secret Voter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+    <!-- MODERN NAVBAR -->
+    <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="bg-blue-600 p-2 rounded-lg shadow-blue-200 shadow-lg">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
+                    Secret Voter 🇮🇳
+                </h1>
+            </div>
+            
+            <div class="flex items-center gap-4">
+              <!-- Inside the nav -->
+<a href="create-poll.html" id="admin-btn" style="display: none;" class="items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm font-semibold transition-all transform hover:scale-105 active:scale-95">
+    <span>+ Create Poll</span>
+</a>
+                <button onclick="logout()" class="text-slate-500 hover:text-red-500 font-medium text-sm transition-colors">
+                    Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-3xl mx-auto px-4 py-12">
+        <header class="mb-10 text-center">
+            <h2 class="text-3xl font-extrabold text-slate-900 mb-2">Active Polls</h2>
+            <p class="text-slate-500">Your vote is secret and secured with end-to-end logic.</p>
+        </header>
+
+        <!-- POLL LIST CONTAINER -->
+        <div id="poll-list" class="grid gap-8">
+            <!-- Loading State -->
+            <div class="animate-pulse space-y-4">
+                <div class="h-32 bg-slate-200 rounded-2xl"></div>
+                <div class="h-32 bg-slate-200 rounded-2xl"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+    <script>
+    function initPage() {
+        const token = localStorage.getItem('token');
+        const isStaff = localStorage.getItem('is_staff'); 
+
+        // 1. Redirect if not logged in
+        if (!token) {
+            window.location.href = 'login.html';
+            return;
+        }
+
+        // 2. FORCE SHOW/HIDE Logic
+        const adminBtn = document.getElementById('admin-btn');
+        
+        // Use 'flex' to show, 'none' to hide
+        if (isStaff === 'true') {
+            adminBtn.style.display = 'flex'; 
+            console.log("Welcome Admin! Showing button.");
+        } else {
+            adminBtn.style.display = 'none';
+            console.log("Welcome User! Hiding button.");
+        }
+    }
+
+    // Run it
+    initPage();
+
+        async function loadPolls() {
+            const res = await apiFetch('voting/polls/');
+            if (!res || !res.ok) return;
+
+            const polls = await res.json();
+            const container = document.getElementById('poll-list');
+            const now = new Date(); // Get current time
+
+            if (polls.length === 0) {
+                container.innerHTML = `<p class="text-center py-20 text-slate-400">No polls found.</p>`;
+                return;
+            }
+
+            container.innerHTML = polls.map(poll => {
+                // LOGIC: Check if poll is active
+                const startTime = new Date(poll.start_time);
+                const endTime = new Date(poll.end_time);
+                const isEnded = now > endTime;
+                const isFuture = now < startTime;
+
+                // Determine Badge Status
+                let badge = "";
+                if (isEnded) {
+                    badge = `<span class="bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border border-slate-200">Ended</span>`;
+                } else if (isFuture) {
+                    badge = `<span class="bg-amber-100 text-amber-600 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border border-amber-200">Upcoming</span>`;
+                } else {
+                    badge = `<span class="bg-green-100 text-green-600 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border border-green-200 animate-pulse">Live</span>`;
+                }
+
+                return `
+                <div class="bg-white rounded-3xl p-1 border border-slate-200 shadow-xl shadow-slate-200/50 hover:shadow-2xl transition-all duration-300 ${isEnded ? 'opacity-75 grayscale-[0.2]' : ''}">
+                    <div class="p-6">
+                        <div class="flex items-start justify-between mb-6">
+                            <h3 class="text-xl font-bold text-slate-800 leading-tight">${poll.question}</h3>
+                            ${badge}
+                        </div>
+                        
+                        <div class="grid gap-3">
+                            ${poll.options.map(opt => `
+                                <button onclick="${isEnded || isFuture ? "alert('Voting is closed for this poll')" : `vote(${poll.id}, ${opt.id})`}" 
+                                    class="group relative w-full text-left p-4 border border-slate-100 rounded-2xl bg-slate-50 transition-all font-semibold 
+                                    ${isEnded || isFuture ? 'cursor-not-allowed text-slate-400' : 'hover:bg-blue-600 hover:text-white text-slate-700 active:scale-[0.98]'}">
+                                    <div class="flex items-center justify-between">
+                                        <span>${opt.option_text}</span>
+                                        ${!isEnded && !isFuture ? '<svg class="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                                    </div>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-50/50 px-7 py-4 rounded-b-[22px] flex justify-between items-center border-t border-slate-100">
+                        <div class="flex items-center gap-2 text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span class="text-[11px] font-medium uppercase tracking-tighter">
+                                ${isEnded ? 'Closed on' : 'Closing on'} ${endTime.toLocaleDateString()}
+                            </span>
+                        </div>
+                        <a href="results.html?id=${poll.id}" class="text-blue-600 text-xs font-bold hover:text-blue-800 hover:underline transition-colors">
+                            ${isEnded ? 'View Final Results →' : 'View Results →'}
+                        </a>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+        async function vote(pollId, optionId) {
+            const res = await apiFetch('voting/polls/vote/', {
+                method: 'POST',
+                body: JSON.stringify({ poll: pollId, option: optionId })
+            });
+            if (res && res.ok) {
+                alert('Success! Your vote has been recorded anonymously.');
+            } else if (res) {
+                const data = await res.json();
+                alert(data[0] || "You have already voted on this poll.");
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        loadPolls();
+    </script>
+</body>
+</html>

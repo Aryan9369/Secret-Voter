@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Poll Results</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-6">
+    <div class="max-w-2xl mx-auto">
+        <a href="index.html" class="text-blue-600 mb-4 inline-block">← Back to Polls</a>
+        <div id="results-card" class="bg-white p-8 rounded-xl shadow-md">
+            <h1 id="question-text" class="text-3xl font-bold mb-6 text-gray-800">Loading...</h1>
+            <div id="options-results" class="space-y-6">
+                <!-- Bar results will appear here -->
+            </div>
+            <div id="admin-actions" class="mt-8 pt-6 border-t hidden">
+                <button onclick="revealResults()" class="bg-green-600 text-white px-6 py-2 rounded font-bold">
+                    Reveal Results to Everyone
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const pollId = urlParams.get('id');
+
+        async function loadResults() {
+            const res = await apiFetch(`voting/polls/${pollId}/results/`);
+            if (res.status === 403) {
+                document.getElementById('question-text').innerText = "Results are Secret";
+                document.getElementById('options-results').innerHTML = `<p class="text-gray-500">The admin has not revealed the results for this poll yet.</p>`;
+                return;
+            }
+            
+            const data = await res.json();
+            document.getElementById('question-text').innerText = data.question;
+
+            // Simple CSS-based bar chart
+            const container = document.getElementById('options-results');
+            container.innerHTML = data.options.map(opt => {
+                const percentage = data.total_votes > 0 ? Math.round((opt.vote_count / data.total_votes) * 100) : 0;
+                return `
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="font-medium">${opt.option_text}</span>
+                            <span class="text-sm font-bold">${opt.vote_count} votes (${percentage}%)</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-4">
+                            <div class="bg-blue-600 h-4 rounded-full" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Show "Reveal" button for admin if not already revealed
+            if (!data.is_result_revealed) {
+                document.getElementById('admin-actions').classList.remove('hidden');
+            }
+        }
+
+        async function revealResults() {
+            const res = await apiFetch(`voting/polls/${pollId}/reveal/`, { method: 'POST' });
+            if (res.ok) {
+                alert('Results revealed to all users!');
+                loadResults();
+            }
+        }
+
+        loadResults();
+    </script>
+</body>
+</html>
